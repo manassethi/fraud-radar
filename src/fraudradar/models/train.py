@@ -70,14 +70,27 @@ def build_features(df: pd.DataFrame, feature_set: str, split: Split, fcfg: Featu
     raise ValueError(f"unknown feature set {feature_set!r}")
 
 
-def train(
+@dataclass
+class Fitted:
+    """A trained booster plus everything needed to score its validation and test folds."""
+
+    booster: lgb.Booster
+    split: Split
+    X: pd.DataFrame
+    y: np.ndarray
+    amount: np.ndarray
+
+    def predict(self, mask: np.ndarray) -> np.ndarray:
+        return self.booster.predict(self.X[mask])
+
+
+def fit(
     df: pd.DataFrame,
     feature_set: str = "pit",
     fcfg: FeatureConfig = FeatureConfig(),
     scfg: SplitConfig = SplitConfig(),
     tcfg: TrainConfig = TrainConfig(),
-    out_dir: Path | None = None,
-) -> dict:
+) -> Fitted:
     split = time_split(df, scfg, fcfg.label_delay)
     X = build_features(df, feature_set, split, fcfg)
     y = df["isFraud"].to_numpy()
@@ -93,13 +106,25 @@ def train(
         valid_sets=[dval],
         callbacks=[lgb.early_stopping(tcfg.early_stopping_rounds, verbose=False)],
     )
+    return Fitted(booster, split, X, y, amt)
 
+
+def train(
+    df: pd.DataFrame,
+    feature_set: str = "pit",
+    fcfg: FeatureConfig = FeatureConfig(),
+    scfg: SplitConfig = SplitConfig(),
+    tcfg: TrainConfig = TrainConfig(),
+    out_dir: Path | None = None,
+) -> dict:
+    m = fit(df, feature_set, fcfg, scfg, tcfg)
+    booster, split, X, y, amt = m.booster, m.split, m.X, m.y, m.amount
     result = {
         "feature_set": feature_set,
         "n_features": X.shape[1],
         "best_iteration": booster.best_iteration,
-        "val": evaluate(y[split.val], booster.predict(X[split.val]), amt[split.val]),
-        "test": evaluate(y[split.test], booster.predict(X[split.test]), amt[split.test]),
+        "val": evaluate(y[split.val], m.predict(split.val), amt[split.val]),
+        "test": evaluate(y[split.test], m.predict(split.test), amt[split.test]),
         "config": {"features": asdict(fcfg), "split": asdict(scfg)},
     }
 
