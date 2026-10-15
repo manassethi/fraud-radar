@@ -42,17 +42,24 @@ that no feature before the cutoff changes.
 ## Leakage experiment
 
 `python -m fraudradar.cli leakage` trains the same LightGBM on three feature sets with an
-out-of-time split (fit | validation | gap | test):
+out-of-time split (fit | validation | gap | test). Results on the IEEE-CIS train set
+(590,540 transactions; validation 51,488 rows; test = last 25% of the timeline, 128,823 rows,
+3.41% fraud):
 
-| features | val AUC | test AUC | val − test | test recall @1% FPR | test $-recall @1% FPR |
-|---|---|---|---|---|---|
-| raw | 0.777 | 0.686 | 0.091 | 0.273 | 0.267 |
-| **pit** | 0.952 | **0.912** | **0.040** | **0.788** | **0.789** |
-| leaky | **0.998** | 0.696 | 0.302 | 0.461 | 0.475 |
+| features | val AUC | test AUC | val − test | test PR-AUC | test recall @1% FPR | test $-recall @1% FPR |
+|---|---|---|---|---|---|---|
+| raw | 0.906 | 0.885 | 0.020 | 0.460 | 0.379 | 0.266 |
+| **pit** | 0.926 | **0.931** | **−0.005** | **0.595** | **0.527** | **0.423** |
+| leaky | **0.999** | 0.802 | 0.197 | 0.359 | 0.332 | 0.201 |
 
-*Numbers above are from the **synthetic** data (`cli synth`), not IEEE-CIS. Replace them
-with your real-data run.* The leaky model has the best validation score and the worst
-generalisation: a 0.30 AUC gap that a random split would never show.
+- **Point-in-time features help where it matters.** Versus raw columns, test PR-AUC rises from
+  0.46 to 0.59 and the share of fraud *dollars* caught at a 1% false-positive rate from 27% to 42%.
+  `account_uid__fraud_rate_known` (reconstructed account, labels delayed 30 days) is the
+  third most important feature.
+- **Leakage is invisible offline and costly out-of-time.** The leaky model scores 0.999
+  validation AUC, the best of the three, yet is the *worst* on the future test period
+  (0.802, below even the raw baseline). Its validation-to-test gap is 0.20 AUC; the PIT model's
+  is essentially zero, so its offline numbers can be trusted.
 
 ## Quickstart
 
@@ -64,9 +71,16 @@ python -m fraudradar.cli leakage
 pytest
 ```
 
-Real data: accept the competition rules on Kaggle, then
-`kaggle competitions download -c ieee-fraud-detection -p data/raw` and unzip.
-Add `--include-v` to load Vesta's V1–V339 columns (more memory).
+Real data: accept the competition rules on Kaggle, save your API token to `~/.kaggle/access_token`, then
+download and unzip the two train files (only they have labels):
+
+```bash
+python -m kaggle competitions download -c ieee-fraud-detection -f train_transaction.csv -p data/raw
+python -m kaggle competitions download -c ieee-fraud-detection -f train_identity.csv -p data/raw
+```
+
+The CSVs are ~700 MB. To keep them outside the repo (e.g. a synced folder), set
+`FRAUDRADAR_RAW_DIR=/path/to/csvs`. Add `--include-v` to load Vesta's V1–V339 columns (more memory).
 
 Outputs go to `artifacts/<run>/`: `model.txt`, `metrics.json`, `feature_importance.csv`.
 
