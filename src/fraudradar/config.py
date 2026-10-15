@@ -63,3 +63,36 @@ class TrainConfig:
             "verbose": -1,
         }
     )
+
+
+@dataclass(frozen=True)
+class CalibrationConfig:
+    # "isotonic" (non-parametric, monotone) or "platt" (logistic on the score's logit).
+    method: str = "isotonic"
+    # Equal-count bins for the reliability table.
+    n_bins: int = 10
+
+
+@dataclass(frozen=True)
+class CostConfig:
+    """Dollar costs of each (action, outcome) pair, from the merchant's point of view.
+
+    Costs are relative to the ideal outcome for each transaction (legit approved, fraud
+    stopped), so allowing a legitimate payment costs 0 and blocking a fraudulent one costs 0.
+    """
+
+    # Allowed fraud becomes a chargeback: the merchant refunds the amount and pays a fee.
+    dispute_fee: float = 15.0
+    # Gross margin on a sale. A false decline loses margin * amount, not the whole amount.
+    margin: float = 0.20
+    # A declined good customer may not come back: P(churn | false decline) * lifetime value.
+    decline_churn_rate: float = 0.05
+    customer_ltv: float = 100.0
+    # 3DS challenge: this share of legitimate customers abandon the checkout ...
+    challenge_dropoff: float = 0.10
+    # ... and this share of fraud attempts fail authentication and are stopped.
+    challenge_catch_rate: float = 0.80
+
+    @property
+    def false_decline_fixed(self) -> float:
+        return self.decline_churn_rate * self.customer_ltv
