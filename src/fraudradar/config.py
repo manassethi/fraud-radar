@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -9,7 +10,8 @@ DAY = 86_400
 HOUR = 3_600
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DIR = PROJECT_ROOT / "data" / "raw"
+# Set FRAUDRADAR_RAW_DIR to keep the (large) Kaggle CSVs outside the repo.
+RAW_DIR = Path(os.environ.get("FRAUDRADAR_RAW_DIR", PROJECT_ROOT / "data" / "raw"))
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 ARTIFACT_DIR = PROJECT_ROOT / "artifacts"
 
